@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -11,15 +10,18 @@ import (
 
 // CanonicalDevice represents a unified device
 type CanonicalDevice struct {
-	ID            string `json:"id"`
-	ExternalID    string `json:"external_id"`
-	ConnectorType string `json:"connector_type"`
-	TenantID      string `json:"tenant_id"`
-	CanonicalName string `json:"canonical_name"`
-	AssetType     string `json:"asset_type"`
-	OSType        string `json:"os_type"`
-	Status        string `json:"status"`
-	LastSeen      string `json:"last_seen"`
+	ID               string `json:"id"`
+	ExternalID       string `json:"external_id"`
+	ConnectorType    string `json:"connector_type"`
+	TenantID         string `json:"tenant_id"`
+	CanonicalName    string `json:"canonical_name"`
+	AssetType        string `json:"asset_type"`
+	OSType           string `json:"os_type"`
+	OSVersion        string `json:"os_version"`
+	SerialNumber     string `json:"serial_number"`
+	ComplianceStatus string `json:"compliance_status"`
+	Status           string `json:"status"`
+	LastSeen         string `json:"last_seen"`
 }
 
 // DeviceResponse is the API response for device endpoints
@@ -108,17 +110,18 @@ func DevicesHandler(w http.ResponseWriter, r *http.Request) {
 // DeviceDetailHandler returns a single device
 func DeviceDetailHandler(w http.ResponseWriter, r *http.Request) {
 	device := CanonicalDevice{
-		ID:            "dev-001",
-		ExternalID:    "mock-001",
-		ConnectorType: "mock",
-		TenantID:      "tenant-001",
-		CanonicalName: "DESKTOP-ABC123",
-		AssetType:     "workstation",
-		OSType:        "windows",
-		OSVersion:     "11 23H2",
-		SerialNumber:  "SN-ABC-12345",
-		Status:        "active",
-		LastSeen:      time.Now().UTC().Add(-5 * time.Minute).Format(time.RFC3339),
+		ID:               "dev-001",
+		ExternalID:       "mock-001",
+		ConnectorType:    "mock",
+		TenantID:         "tenant-001",
+		CanonicalName:    "DESKTOP-ABC123",
+		AssetType:        "workstation",
+		OSType:           "windows",
+		OSVersion:        "11 23H2",
+		SerialNumber:     "SN-ABC-12345",
+		ComplianceStatus: "compliant",
+		Status:           "active",
+		LastSeen:         time.Now().UTC().Add(-5 * time.Minute).Format(time.RFC3339),
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(device)
