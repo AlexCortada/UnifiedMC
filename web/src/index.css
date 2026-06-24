@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-primary: #3b82f6;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-info: #6366f1;
+}
+
+body {
+  @apply bg-gray-50 text-gray-900 antialiased;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+.card {
+  @apply bg-white rounded-lg shadow-sm border border-gray-200 p-4;
+}
+
+.kpi-value {
+  @apply text-3xl font-bold text-gray-900;
+}
+
+.kpi-label {
+  @apply text-xs font-semibold uppercase tracking-wide text-gray-500;
+}
+
+.trend-up {
+  @apply text-sm font-medium text-emerald-600;
+}
+
+.trend-down {
+  @apply text-sm font-medium text-red-600;
+}

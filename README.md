@@ -28,26 +28,27 @@ The full Project Specification Document (PSD) is maintained at:
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-## Quick Start
+## Development Workflow
 
-### Prerequisites
-- Docker & Docker Compose
-- Go 1.22+ (for backend services)
-
-### Local Development
-
-```bash
-# Start data infrastructure
-docker compose -f infrastructure/docker/docker-compose.yml up -d
-
-# Run database migrations
-for f in database/migrations/*.sql; do
-  PGPASSWORD=*** psql -h localhost -U unifiedmc -d unifiedmc -f "$f"
-done
-
-# Start API gateway
-cd services/api-gateway && go run .
 ```
+1. Create/update files locally
+2. Push to GitHub repo (source of truth)
+3. SSH to Mission Control (UMC): ssh hermes@10.0.10.123
+4. Pull updates: cd /opt/unifiedmc && git pull origin main
+5. Validate: run tests, check services, verify API
+```
+
+### Mission Control (UMC)
+- **Host:** 10.0.10.123
+- **OS:** Ubuntu 24.04 LTS
+- **User:** hermes
+- **App Directory:** /opt/unifiedmc
+- **Specs:** 16GB RAM, 256GB SSD, i5
+
+### GitHub Repo
+- **URL:** https://github.com/AlexCortada/UnifiedMC/
+- **Branch:** main (all changes merged here)
+- **Purpose:** Source of truth, backup, collaboration
 
 ## Project Structure
 
