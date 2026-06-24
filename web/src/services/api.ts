@@ -37,7 +37,12 @@ const API_BASE = '/api/v1';
 export async function fetchDevices(): Promise<PaginatedResponse<Device>> {
   const res = await fetch(`${API_BASE}/devices`);
   if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
+  const data = await res.json();
+  // Handle both { devices: [...] } and { items: [...] } response formats
+  if (data.devices && !data.items) {
+    return { items: data.devices, total: data.total || data.devices.length, source: data.source || 'api' };
+  }
+  return data;
 }
 
 export async function fetchDevice(id: string): Promise<Device> {
@@ -49,8 +54,8 @@ export async function fetchDevice(id: string): Promise<Device> {
 export async function fetchDashboardSummary(): Promise<DashboardSummary> {
   // For now, derive from devices endpoint. Later: dedicated dashboard API.
   const devices = await fetchDevices();
-  const items = devices.items;
-  const total = devices.total;
+  const items = devices.items || [];
+  const total = devices.total || items.length;
   const online = items.filter(d => d.status === 'active').length;
   const compliant = items.filter(d => d.compliance_status === 'compliant').length;
   return {

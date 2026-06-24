@@ -36,3 +36,7 @@ docker-compose.override.yml
 .terraform/
 *.tfstate
 *.tfstate.*
+web/node_modules/
+web/dist/
+services/api-gateway/api-gateway
+scripts/

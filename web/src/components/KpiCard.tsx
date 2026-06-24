@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 
 interface KpiCardProps {
@@ -5,7 +6,7 @@ interface KpiCardProps {
   value: string | number;
   change?: number;
   previousValue?: number;
-  icon: React.ReactNode;
+  icon: ReactNode;
   color?: 'blue' | 'green' | 'red' | 'amber' | 'purple';
 }
 
