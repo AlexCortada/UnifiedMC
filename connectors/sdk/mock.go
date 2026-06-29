@@ -1,20 +1,19 @@
 package sdk
 
 import (
+	"context"
 	"fmt"
 	"time"
-
-	"github.com/unifiedmc/packages/types"
 )
 
-// MockConnector is a test implementation of the Connector interface
+// MockConnector is a test implementation of the Connector interface.
 type MockConnector struct {
 	BaseConnector
-	devices []types.CanonicalDevice
-	users   []types.CanonicalUser
+	devices []CanonicalDevice
+	users   []CanonicalUser
 }
 
-// NewMockConnector creates a new mock connector with sample data
+// NewMockConnector creates a new mock connector with sample data.
 func NewMockConnector() *MockConnector {
 	return &MockConnector{
 		devices: generateMockDevices(),
@@ -22,35 +21,34 @@ func NewMockConnector() *MockConnector {
 	}
 }
 
-// Initialize prepares the mock connector
+// Initialize prepares the mock connector.
 func (m *MockConnector) Initialize(config ConnectorConfig) error {
 	m.BaseInitialize(config, "mock")
 	return nil
 }
 
-// Connect simulates connection
+// Connect simulates connection.
 func (m *MockConnector) Connect() error {
 	m.BaseConnect()
 	return nil
 }
 
-// Disconnect simulates disconnection
+// Disconnect simulates disconnection.
 func (m *MockConnector) Disconnect() error {
 	m.BaseDisconnect()
 	return nil
 }
 
-// HealthCheck returns mock health status
+// HealthCheck returns mock health status.
 func (m *MockConnector) HealthCheck() HealthStatus {
 	return HealthStatus{
-		ConnectorType:     "mock",
-		Status:            "connected",
-		LastSuccessfulSync: time.Now().UTC(),
-		LatencyMs:         5,
+		ConnectorType: "mock",
+		Status:        "connected",
+		LatencyMs:     5,
 	}
 }
 
-// GetCapabilities declares mock capabilities
+// GetCapabilities declares mock capabilities.
 func (m *MockConnector) GetCapabilities() ConnectorCapabilities {
 	return ConnectorCapabilities{
 		ConnectorType: "mock",
@@ -63,8 +61,8 @@ func (m *MockConnector) GetCapabilities() ConnectorCapabilities {
 	}
 }
 
-// GetDevices returns paginated mock devices
-func (m *MockConnector) GetDevices(cursor string, pageSize int, filters map[string]interface{}) ([]types.CanonicalDevice, string, int, error) {
+// GetDevices returns paginated mock devices.
+func (m *MockConnector) GetDevices(cursor string, pageSize int, filters map[string]interface{}) ([]CanonicalDevice, string, int, error) {
 	start := 0
 	end := start + pageSize
 	if end > len(m.devices) {
@@ -77,8 +75,8 @@ func (m *MockConnector) GetDevices(cursor string, pageSize int, filters map[stri
 	return m.devices[start:end], nextCursor, len(m.devices), nil
 }
 
-// GetDevice returns a single mock device
-func (m *MockConnector) GetDevice(deviceID string) (*types.CanonicalDevice, error) {
+// GetDevice returns a single mock device.
+func (m *MockConnector) GetDevice(deviceID string) (*CanonicalDevice, error) {
 	for _, d := range m.devices {
 		if d.ExternalID == deviceID {
 			return &d, nil
@@ -87,14 +85,14 @@ func (m *MockConnector) GetDevice(deviceID string) (*types.CanonicalDevice, erro
 	return nil, fmt.Errorf("device not found: %s", deviceID)
 }
 
-// GetUsers returns mock users
-func (m *MockConnector) GetUsers(cursor string, pageSize int, filters map[string]interface{}) ([]types.CanonicalUser, string, int, error) {
+// GetUsers returns mock users.
+func (m *MockConnector) GetUsers(cursor string, pageSize int, filters map[string]interface{}) ([]CanonicalUser, string, int, error) {
 	return m.users, "", len(m.users), nil
 }
 
-// RunScript simulates script execution
-func (m *MockConnector) RunScript(deviceID string, content string, scriptType string, timeout int) (types.ScriptResult, error) {
-	return types.ScriptResult{
+// RunScript simulates script execution.
+func (m *MockConnector) RunScript(deviceID string, content string, scriptType string, timeout int) (ScriptResult, error) {
+	return ScriptResult{
 		ScriptID: "mock-script",
 		DeviceID: deviceID,
 		ExitCode: 0,
@@ -104,9 +102,9 @@ func (m *MockConnector) RunScript(deviceID string, content string, scriptType st
 	}, nil
 }
 
-// RestartDevice simulates device restart
-func (m *MockConnector) RestartDevice(deviceID string, force bool, reason string) (types.ActionResult, error) {
-	return types.ActionResult{
+// RestartDevice simulates device restart.
+func (m *MockConnector) RestartDevice(deviceID string, force bool, reason string) (ActionResult, error) {
+	return ActionResult{
 		ActionID:   fmt.Sprintf("restart-%d", time.Now().Unix()),
 		ActionType: "restart",
 		DeviceID:   deviceID,
@@ -115,9 +113,9 @@ func (m *MockConnector) RestartDevice(deviceID string, force bool, reason string
 	}, nil
 }
 
-// DeployApplication simulates app deployment
-func (m *MockConnector) DeployApplication(appID string, deviceIDs []string) (types.DeploymentResult, error) {
-	return types.DeploymentResult{
+// DeployApplication simulates app deployment.
+func (m *MockConnector) DeployApplication(appID string, deviceIDs []string) (DeploymentResult, error) {
+	return DeploymentResult{
 		DeploymentID: fmt.Sprintf("deploy-%d", time.Now().Unix()),
 		DeviceID:     deviceIDs[0],
 		Status:       "pending",
@@ -125,8 +123,8 @@ func (m *MockConnector) DeployApplication(appID string, deviceIDs []string) (typ
 	}, nil
 }
 
-func generateMockDevices() []types.CanonicalDevice {
-	return []types.CanonicalDevice{
+func generateMockDevices() []CanonicalDevice {
+	return []CanonicalDevice{
 		{
 			ID:               "dev-001",
 			ExternalID:       "mock-001",
@@ -145,6 +143,7 @@ func generateMockDevices() []types.CanonicalDevice {
 			Status:           "active",
 			ComplianceStatus: "compliant",
 			LastSeen:         time.Now().UTC().Add(-5 * time.Minute),
+			Metadata:         map[string]interface{}{},
 		},
 		{
 			ID:               "dev-002",
@@ -164,6 +163,7 @@ func generateMockDevices() []types.CanonicalDevice {
 			Status:           "active",
 			ComplianceStatus: "compliant",
 			LastSeen:         time.Now().UTC().Add(-12 * time.Minute),
+			Metadata:         map[string]interface{}{},
 		},
 		{
 			ID:               "dev-003",
@@ -183,12 +183,13 @@ func generateMockDevices() []types.CanonicalDevice {
 			Status:           "active",
 			ComplianceStatus: "non_compliant",
 			LastSeen:         time.Now().UTC().Add(-2 * time.Hour),
+			Metadata:         map[string]interface{}{},
 		},
 	}
 }
 
-func generateMockUsers() []types.CanonicalUser {
-	return []types.CanonicalUser{
+func generateMockUsers() []CanonicalUser {
+	return []CanonicalUser{
 		{
 			ID:            "user-001",
 			ExternalID:    "mock-user-001",

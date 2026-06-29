@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/unifiedmc/connectors/sdk"
+	sdk "github.com/unifiedmc/connectors/sdk"
 )
 
 // Connector implements the IConnector interface for Microsoft Intune

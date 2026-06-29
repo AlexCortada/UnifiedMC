@@ -8,32 +8,133 @@ import (
 	"time"
 )
 
-// Connector is the interface that every connector must implement
+// --- Canonical Data Models ---
+
+type CanonicalDevice struct {
+	ID               string                 `json:"id"`
+	ExternalID       string                 `json:"external_id"`
+	ConnectorType    string                 `json:"connector_type"`
+	TenantID         string                 `json:"tenant_id"`
+	CanonicalName    string                 `json:"canonical_name"`
+	AssetType        string                 `json:"asset_type"`
+	OSType           string                 `json:"os_type"`
+	OSVersion        string                 `json:"os_version"`
+	SerialNumber     string                 `json:"serial_number"`
+	Manufacturer     string                 `json:"manufacturer"`
+	Model            string                 `json:"model"`
+	PrimaryUserID    string                 `json:"primary_user_id"`
+	IPAddress        string                 `json:"ip_address"`
+	MACAddress       string                 `json:"mac_address"`
+	Status           string                 `json:"status"`
+	ComplianceStatus string                 `json:"compliance_status"`
+	LastSeen         time.Time              `json:"last_seen"`
+	RiskScore        int                    `json:"risk_score"`
+	Metadata         map[string]interface{} `json:"metadata"`
+}
+
+type CanonicalUser struct {
+	ID            string   `json:"id"`
+	ExternalID    string   `json:"external_id"`
+	ConnectorType string   `json:"connector_type"`
+	TenantID      string   `json:"tenant_id"`
+	Email         string   `json:"email"`
+	DisplayName   string   `json:"display_name"`
+	FirstName     string   `json:"first_name"`
+	LastName      string   `json:"last_name"`
+	Department    string   `json:"department"`
+	JobTitle      string   `json:"job_title"`
+	ManagerID     string   `json:"manager_id"`
+	Status        string   `json:"status"`
+	Roles         []string `json:"roles"`
+	Groups        []string `json:"groups"`
+}
+
+// --- Connector Interface ---
+
 type Connector interface {
 	Initialize(config ConnectorConfig) error
 	Connect() error
 	Disconnect() error
 	HealthCheck() HealthStatus
 	GetCapabilities() ConnectorCapabilities
-	GetDevices(cursor string, pageSize int, filters map[string]interface{}) ([]types.CanonicalDevice, string, int, error)
-	GetDevice(deviceID string) (*types.CanonicalDevice, error)
-	GetUsers(cursor string, pageSize int, filters map[string]interface{}) ([]types.CanonicalUser, string, int, error)
-	RunScript(deviceID string, content string, scriptType string, timeout int) (types.ScriptResult, error)
-	RestartDevice(deviceID string, force bool, reason string) (types.ActionResult, error)
-	DeployApplication(appID string, deviceIDs []string) (types.DeploymentResult, error)
+	GetDevices(cursor string, pageSize int, filters map[string]interface{}) ([]CanonicalDevice, string, int, error)
+	GetDevice(deviceID string) (*CanonicalDevice, error)
+	GetUsers(cursor string, pageSize int, filters map[string]interface{}) ([]CanonicalUser, string, int, error)
+	RunScript(deviceID string, content string, scriptType string, timeout int) (ScriptResult, error)
+	RestartDevice(deviceID string, force bool, reason string) (ActionResult, error)
+	DeployApplication(appID string, deviceIDs []string) (DeploymentResult, error)
 }
 
-// BaseConnector provides shared infrastructure for all connectors
+// --- Supporting Types ---
+
+type ConnectorConfig struct {
+	ConnectorType  string                 `json:"connector_type"`
+	TenantID       string                 `json:"tenant_id"`
+	Name           string                 `json:"name"`
+	Enabled        bool                   `json:"enabled"`
+	BaseURL        string                 `json:"base_url"`
+	Auth           map[string]interface{} `json:"auth"`
+	RateLimit      int                    `json:"rate_limit"`
+	TimeoutSeconds int                    `json:"timeout_seconds"`
+	MaxRetries     int                    `json:"max_retries"`
+	SyncInterval   int                    `json:"sync_interval_minutes"`
+	Metadata       map[string]interface{} `json:"metadata"`
+	Filters        map[string]interface{} `json:"filters"`
+}
+
+type HealthStatus struct {
+	ConnectorType      string `json:"connector_type"`
+	Status             string `json:"status"`
+	LastSuccessfulSync string `json:"last_successful_sync,omitempty"`
+	ErrorMessage       string `json:"error_message,omitempty"`
+	LatencyMs          int    `json:"latency_ms"`
+}
+
+type ScriptResult struct {
+	ScriptID string  `json:"script_id"`
+	DeviceID string  `json:"device_id"`
+	ExitCode int     `json:"exit_code"`
+	Stdout   string  `json:"stdout"`
+	Stderr   string  `json:"stderr"`
+	Duration float64 `json:"duration_seconds"`
+	Status   string  `json:"status"`
+}
+
+type ActionResult struct {
+	ActionID   string `json:"action_id"`
+	ActionType string `json:"action_type"`
+	DeviceID   string `json:"device_id"`
+	Status     string `json:"status"`
+	Message    string `json:"message"`
+}
+
+type DeploymentResult struct {
+	DeploymentID string `json:"deployment_id"`
+	DeviceID     string `json:"device_id"`
+	Status       string `json:"status"`
+	Message      string `json:"message"`
+}
+
+type ConnectorCapabilities struct {
+	ConnectorType string   `json:"connector_type"`
+	EntityTypes   []string `json:"entity_types"`
+	Operations    []string `json:"operations"`
+	Actions       []string `json:"actions"`
+	AuthMethods   []string `json:"auth_methods"`
+	SyncModes     []string `json:"sync_modes"`
+	RateLimit     int      `json:"rate_limit"`
+}
+
+// --- Base Connector ---
+
 type BaseConnector struct {
 	Config      ConnectorConfig
-	Logger      *log.Logger
 	mu          sync.RWMutex
 	connected   bool
 	healthy     bool
 	rateLimiter *TokenBucket
 }
 
-// TokenBucket implements a simple rate limiter
 type TokenBucket struct {
 	tokens     float64
 	maxTokens  float64
@@ -42,7 +143,6 @@ type TokenBucket struct {
 	mu         sync.Mutex
 }
 
-// NewTokenBucket creates a new token bucket rate limiter
 func NewTokenBucket(rate, burst int) *TokenBucket {
 	return &TokenBucket{
 		tokens:     float64(burst),
@@ -52,7 +152,6 @@ func NewTokenBucket(rate, burst int) *TokenBucket {
 	}
 }
 
-// Acquire blocks until a token is available
 func (tb *TokenBucket) Acquire(ctx context.Context) error {
 	for {
 		tb.mu.Lock()
@@ -76,14 +175,11 @@ func (tb *TokenBucket) Acquire(ctx context.Context) error {
 	}
 }
 
-// BaseInitialize sets up the base connector
 func (b *BaseConnector) BaseInitialize(config ConnectorConfig, name string) {
 	b.Config = config
-	b.Logger = log.Printf("[%s] ", name)
 	b.rateLimiter = NewTokenBucket(config.RateLimit, config.RateLimit*2)
 }
 
-// BaseConnect marks the connector as connected
 func (b *BaseConnector) BaseConnect() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -91,7 +187,6 @@ func (b *BaseConnector) BaseConnect() {
 	b.healthy = true
 }
 
-// BaseDisconnect marks the connector as disconnected
 func (b *BaseConnector) BaseDisconnect() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -99,34 +194,31 @@ func (b *BaseConnector) BaseDisconnect() {
 	b.healthy = false
 }
 
-// IsConnected returns connection status
 func (b *BaseConnector) IsConnected() bool {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
 	return b.connected
 }
 
-// Registry manages all connector implementations
+// --- Registry ---
+
 type Registry struct {
 	mu         sync.RWMutex
 	connectors map[string]func() Connector
 }
 
-// NewRegistry creates a new connector registry
 func NewRegistry() *Registry {
 	return &Registry{
 		connectors: make(map[string]func() Connector),
 	}
 }
 
-// Register registers a connector factory function
 func (r *Registry) Register(connectorType string, factory func() Connector) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.connectors[connectorType] = factory
 }
 
-// Create creates a new connector instance by type
 func (r *Registry) Create(connectorType string) (Connector, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -138,7 +230,6 @@ func (r *Registry) Create(connectorType string) (Connector, error) {
 	return factory(), nil
 }
 
-// List returns all registered connector types
 func (r *Registry) List() []string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -150,13 +241,8 @@ func (r *Registry) List() []string {
 	return types
 }
 
-// Global registry instance
 var GlobalRegistry = NewRegistry()
 
-// RegisterConnector registers a connector in the global registry
 func RegisterConnector(connectorType string, factory func() Connector) {
 	GlobalRegistry.Register(connectorType, factory)
 }
-
-// Ensure types package is imported
-var _ = types.CanonicalDevice{}
