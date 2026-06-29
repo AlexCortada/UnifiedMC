@@ -126,19 +126,23 @@ func deviceDetailHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var device CanonicalDevice
+	var displayName sql.NullString
 	var lastSeen sql.NullTime
 	err := db.QueryRow(`
-		SELECT id, canonical_name, asset_type, os_type, os_version, serial_number,
+		SELECT id, display_name, asset_type, os_type, os_version, serial_number,
 		       manufacturer, model, status, compliance_status, last_seen
-		FROM unified_devices WHERE id = $1 OR canonical_name ILIKE $2
+		FROM unified_devices WHERE id = $1 OR display_name ILIKE $2
 		LIMIT 1`, deviceID, "%"+deviceID+"%").Scan(
-		&device.ID, &device.CanonicalName, &device.AssetType, &device.OSType,
+		&device.ID, &displayName, &device.AssetType, &device.OSType,
 		&device.OSVersion, &device.SerialNumber, &device.Manufacturer, &device.Model,
 		&device.Status, &device.ComplianceStatus, &device.LastSeen,
 	)
 	if err != nil {
 		http.Error(w, `{"error": "device not found"}`, 404)
 		return
+	}
+	if displayName.Valid {
+		device.CanonicalName = displayName.String
 	}
 	if lastSeen.Valid {
 		device.LastSeen = lastSeen.Time.Format(time.RFC3339)
@@ -162,7 +166,7 @@ func syncTriggerHandler(w http.ResponseWriter, r *http.Request) {
 
 func getDevicesFromDB(osType, status, compliance string) ([]CanonicalDevice, error) {
 	query := `
-		SELECT id, canonical_name, asset_type, os_type, os_version, serial_number,
+		SELECT id, display_name, asset_type, os_type, os_version, serial_number,
 		       manufacturer, model, status, compliance_status, last_seen
 		FROM unified_devices
 		WHERE 1=1`
@@ -196,14 +200,18 @@ func getDevicesFromDB(osType, status, compliance string) ([]CanonicalDevice, err
 	var devices []CanonicalDevice
 	for rows.Next() {
 		var d CanonicalDevice
+		var displayName sql.NullString
 		var lastSeen sql.NullTime
 		err := rows.Scan(
-			&d.ID, &d.CanonicalName, &d.AssetType, &d.OSType,
+			&d.ID, &displayName, &d.AssetType, &d.OSType,
 			&d.OSVersion, &d.SerialNumber, &d.Manufacturer, &d.Model,
 			&d.Status, &d.ComplianceStatus, &lastSeen,
 		)
 		if err != nil {
 			return nil, err
+		}
+		if displayName.Valid {
+			d.CanonicalName = displayName.String
 		}
 		if lastSeen.Valid {
 			d.LastSeen = lastSeen.Time.Format(time.RFC3339)
