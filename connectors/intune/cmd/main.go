@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"time"
 
 	intune "github.com/unifiedmc/connectors/intune"
 	sdk "github.com/unifiedmc/connectors/sdk"
