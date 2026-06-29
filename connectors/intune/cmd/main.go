@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/unifiedmc/connectors/intune"
 	_ "github.com/unifiedmc/connectors/intune"
@@ -55,14 +54,8 @@ func main() {
 	}
 	fmt.Println("Connected!")
 
-	// Connect to database
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		dbURL = "postgresql://unifiedmc:***@127.0.0.1:5432/unifiedmc?sslmode=disable"
-	}
-
-	// Clean the URL (remove any accidental whitespace/newlines)
-	dbURL = strings.TrimSpace(dbURL)
+	// Connect to database - always use default (ignore env to avoid SSH corruption)
+	dbURL := "postgresql://unifiedmc:***@127.0.0.1:5432/unifiedmc?sslmode=disable"
 
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
