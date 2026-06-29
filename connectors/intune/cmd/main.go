@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/unifiedmc/connectors/intune"
 	_ "github.com/unifiedmc/connectors/intune"
@@ -59,6 +60,9 @@ func main() {
 	if dbURL == "" {
 		dbURL = "postgresql://unifiedmc:***@127.0.0.1:5432/unifiedmc?sslmode=disable"
 	}
+	
+	// Clean the URL (remove any accidental whitespace/newlines)
+	dbURL = strings.TrimSpace(dbURL)
 
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
