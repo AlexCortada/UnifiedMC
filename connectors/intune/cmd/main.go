@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"time"
 
 	"github.com/unifiedmc/connectors/intune"
 	_ "github.com/unifiedmc/connectors/intune"
