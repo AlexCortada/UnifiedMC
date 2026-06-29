@@ -15,14 +15,12 @@ import (
 func main() {
 	fmt.Println("=== Intune Connector - Full Sync ===")
 
-	// Load config
 	cfg, err := intune.LoadConfig()
 	if err != nil {
 		fmt.Printf("Config error: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Create connector
 	connector, err := sdk.GlobalRegistry.Create("microsoft_intune")
 	if err != nil {
 		fmt.Printf("Registry error: %v\n", err)
@@ -46,7 +44,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Test connection
 	fmt.Println("Connecting to Microsoft Graph API...")
 	if err := connector.Connect(); err != nil {
 		fmt.Printf("Connection failed: %v\n", err)
@@ -54,9 +51,7 @@ func main() {
 	}
 	fmt.Println("Connected!")
 
-	// Connect to database - always use default (ignore env to avoid SSH corruption)
 	dbURL := "postgresql://unifiedmc:***@127.0.0.1:5432/unifiedmc?sslmode=disable"
-
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		fmt.Printf("Database error: %v\n", err)
@@ -120,14 +115,11 @@ func storeDevice(db *sql.DB, d sdk.CanonicalDevice) error {
 		metadataJSON = []byte("{}")
 	}
 
-	// Build merged sources array
 	mergedSources := "{" + d.ConnectorType + "}"
 
-	// Handle empty IP/MAC values (inet type doesn't accept empty strings)
 	ipAddress := sql.NullString{String: d.IPAddress, Valid: d.IPAddress != "" && d.IPAddress != " "}
 	macAddress := sql.NullString{String: d.MACAddress, Valid: d.MACAddress != "" && d.MACAddress != " "}
 
-	// Get or create the default tenant
 	tenantID := getOrCreateTenant(db, d.TenantID)
 
 	_, err := db.Exec(`
@@ -141,6 +133,13 @@ func storeDevice(db *sql.DB, d sdk.CanonicalDevice) error {
 			$11, $12, $13,
 			$14::varchar[], $15, $16::jsonb, NOW(), NOW()
 		)
+		ON CONFLICT (serial_number) DO UPDATE SET
+			display_name = EXCLUDED.display_name,
+			os_version = EXCLUDED.os_version,
+			status = EXCLUDED.status,
+			compliance_status = EXCLUDED.compliance_status,
+			last_seen = EXCLUDED.last_seen,
+			updated_at = NOW()
 	`,
 		tenantID,
 		d.CanonicalName,
@@ -162,16 +161,13 @@ func storeDevice(db *sql.DB, d sdk.CanonicalDevice) error {
 	return err
 }
 
-// getOrCreateTenant returns the tenant ID, creating a default tenant if needed
 func getOrCreateTenant(db *sql.DB, name string) string {
-	// Try to find existing tenant
 	var id string
 	err := db.QueryRow("SELECT id FROM tenants WHERE name = $1", name).Scan(&id)
 	if err == nil {
 		return id
 	}
 
-	// Create default tenant
 	if name == "" {
 		name = "Default Tenant"
 	}
@@ -180,7 +176,6 @@ func getOrCreateTenant(db *sql.DB, name string) string {
 		name, name+".local",
 	).Scan(&id)
 	if err != nil {
-		// Fallback: return first tenant
 		db.QueryRow("SELECT id FROM tenants LIMIT 1").Scan(&id)
 	}
 	return id
