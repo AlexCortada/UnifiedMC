@@ -81,6 +81,8 @@ func main() {
 		for _, d := range devices {
 			if err := storeDevice(db, d); err == nil {
 				stored++
+			} else {
+				fmt.Printf("  Error storing device %s: %v\n", d.CanonicalName, err)
 			}
 		}
 		fmt.Printf("Stored/updated %d devices\n", stored)
@@ -114,33 +116,40 @@ func main() {
 
 func storeDevice(db *sql.DB, d sdk.CanonicalDevice) error {
 	metadataJSON, _ := json.Marshal(d.Metadata)
-	var lastSeen interface{}
-	if !d.LastSeen.IsZero() {
-		lastSeen = d.LastSeen
+	if metadataJSON == nil {
+		metadataJSON = []byte("{}")
 	}
+
+	// Build merged sources array
+	mergedSources := "{" + d.ConnectorType + "}"
 
 	_, err := db.Exec(`
 		INSERT INTO unified_devices (
 			tenant_id, display_name, asset_type, os_type, os_version,
-			serial_number, manufacturer, model, primary_user_id, ip_address,
-			mac_address, status, compliance_status, last_seen, merged_from_sources,
-			merge_confidence, metadata, created_at, updated_at
+			serial_number, manufacturer, model,
+			mac_address, status, compliance_status, last_seen,
+			merged_from_sources, merge_confidence, metadata, created_at, updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-			$11, $12, $13, $14, $15, $16, $17, NOW(), NOW()
+			$1, $2, $3, $4, $5, $6, $7, $8,
+			$9, $10, $11, $12,
+			$13::varchar[], $14, $15::jsonb, NOW(), NOW()
 		)
-		ON CONFLICT (serial_number) DO UPDATE SET
-			display_name = EXCLUDED.display_name,
-			os_version = EXCLUDED.os_version,
-			status = EXCLUDED.status,
-			compliance_status = EXCLUDED.compliance_status,
-			last_seen = EXCLUDED.last_seen,
-			updated_at = NOW()
 	`,
-		d.TenantID, d.CanonicalName, d.AssetType, d.OSType, d.OSVersion,
-		d.SerialNumber, d.Manufacturer, d.Model, d.PrimaryUserID, d.IPAddress,
-		d.MACAddress, d.Status, d.ComplianceStatus, lastSeen,
-		fmt.Sprintf("{%s}", d.ConnectorType), 1.0, metadataJSON,
+		"00000000-0000-0000-0000-000000000001", // tenant_id (placeholder UUID)
+		d.CanonicalName,
+		d.AssetType,
+		d.OSType,
+		d.OSVersion,
+		d.SerialNumber,
+		d.Manufacturer,
+		d.Model,
+		d.MACAddress,
+		d.Status,
+		d.ComplianceStatus,
+		d.LastSeen,
+		mergedSources,
+		1.0,
+		metadataJSON,
 	)
 	return err
 }
@@ -149,19 +158,21 @@ func storeUser(db *sql.DB, u sdk.CanonicalUser) error {
 	_, err := db.Exec(`
 		INSERT INTO users (
 			tenant_id, email, display_name, first_name, last_name,
-			department, job_title, status, created_at, updated_at
+			status, created_at, updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, NOW(), NOW()
+			$1, $2, $3, $4, $5, $6, NOW(), NOW()
 		)
 		ON CONFLICT (tenant_id, email) DO UPDATE SET
 			display_name = EXCLUDED.display_name,
-			department = EXCLUDED.department,
-			job_title = EXCLUDED.job_title,
 			status = EXCLUDED.status,
 			updated_at = NOW()
 	`,
-		u.TenantID, u.Email, u.DisplayName, u.FirstName, u.LastName,
-		u.Department, u.JobTitle, u.Status,
+		"00000000-0000-0000-0000-000000000001", // tenant_id (placeholder UUID)
+		u.Email,
+		u.DisplayName,
+		u.FirstName,
+		u.LastName,
+		u.Status,
 	)
 	return err
 }
