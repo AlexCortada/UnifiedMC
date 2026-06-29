@@ -6,35 +6,46 @@ import (
 	"os"
 	"time"
 
-	"github.com/unifiedmc/connectors/intune"
+	intune "github.com/unifiedmc/connectors/intune"
+	sdk "github.com/unifiedmc/connectors/sdk"
 )
 
 func main() {
 	fmt.Println("=== Intune Connector Test ===")
 
-	// Create connector
-	connector := intune.NewConnector()
+	cfg, err := intune.LoadConfig()
+	if err != nil {
+		fmt.Printf("Config error: %v\n", err)
+		os.Exit(1)
+	}
 
-	// Initialize with credentials from environment
+	// Create connector using the SDK registry
+	connector, err := sdk.GlobalRegistry.Create("microsoft_intune")
+	if err != nil {
+		fmt.Printf("Registry error: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Initialize with credentials
 	config := sdk.ConnectorConfig{
 		ConnectorType: "microsoft_intune",
-		TenantID:      "test-tenant",
-		Name:          "Intune Test",
+		TenantID:      cfg.TenantID,
+		Name:          "Intune Production",
 		Auth: map[string]interface{}{
-			"tenant_id":     os.Getenv("INTUNE_TENANT_ID"),
-			"client_id":     os.Getenv("INTUNE_CLIENT_ID"),
-			"client_secret": os.Getenv("INTUNE_CLIENT_SECRET"),
+			"tenant_id":     cfg.TenantID,
+			"client_id":     cfg.ClientID,
+			"client_secret": cfg.ClientSecret,
 		},
 		RateLimit: 60,
 	}
 
 	if err := connector.Initialize(config); err != nil {
-		fmt.Printf("Init error (expected if no creds): %v\n", err)
+		fmt.Printf("Init error: %v\n", err)
 		os.Exit(1)
 	}
 
 	// Test connection
-	fmt.Println("Testing connection...")
+	fmt.Println("Testing connection to Microsoft Graph API...")
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -49,31 +60,31 @@ func main() {
 	fmt.Printf("Capabilities: %v\n", caps.Actions)
 
 	// Fetch devices
-	fmt.Println("Fetching devices...")
+	fmt.Println("Fetching devices from Intune...")
 	devices, _, total, err := connector.GetDevices("", 100, nil)
 	if err != nil {
 		fmt.Printf("Error fetching devices: %v\n", err)
 	} else {
 		fmt.Printf("Found %d devices:\n", total)
 		for i, d := range devices {
-			if i >= 5 {
-				fmt.Printf("  ... and %d more\n", total-5)
+			if i >= 10 {
+				fmt.Printf("  ... and %d more\n", total-10)
 				break
 			}
-			fmt.Printf("  - %s (%s %s) [%s]\n", d.CanonicalName, d.OSType, d.OSVersion, d.ComplianceStatus)
+			fmt.Printf("  - %s (%s %s) [%s] %s\n", d.CanonicalName, d.OSType, d.OSVersion, d.ComplianceStatus, d.SerialNumber)
 		}
 	}
 
 	// Fetch users
-	fmt.Println("Fetching users...")
+	fmt.Println("Fetching users from Entra ID...")
 	users, _, userCount, err := connector.GetUsers("", 10, nil)
 	if err != nil {
 		fmt.Printf("Error fetching users: %v\n", err)
 	} else {
 		fmt.Printf("Found %d users:\n", userCount)
 		for i, u := range users {
-			if i >= 5 {
-				fmt.Printf("  ... and %d more\n", userCount-5)
+			if i >= 10 {
+				fmt.Printf("  ... and %d more\n", userCount-10)
 				break
 			}
 			fmt.Printf("  - %s (%s) [%s]\n", u.DisplayName, u.Email, u.Department)
@@ -81,8 +92,8 @@ func main() {
 	}
 
 	// Health check
-	health := connector.Connector.HealthCheck()
-	fmt.Printf("Health: %s (latency: %dms)\n", health.Status, health.LatencyMs)
+	health := connector.HealthCheck()
+	fmt.Printf("\nHealth: %s (latency: %dms)\n", health.Status, health.LatencyMs)
 
-	fmt.Println("\\n=== Test Complete ===")
+	fmt.Println("\n=== Test Complete ===")
 }

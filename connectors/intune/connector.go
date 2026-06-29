@@ -13,6 +13,9 @@ import (
 type Connector struct {
 	sdk.BaseConnector
 	client *GraphClient
+	tenantID string
+	clientID string
+	clientSecret string
 }
 
 // NewConnector creates a new Intune connector
@@ -23,21 +26,21 @@ func NewConnector() *Connector {
 // Initialize sets up the connector with configuration
 func (c *Connector) Initialize(config sdk.ConnectorConfig) error {
 	c.BaseInitialize(config, "intune")
-
-	// Build Intune-specific config from connector config
-	intuneCfg := &Config{
-		TenantID:     getString(config.Auth, "tenant_id"),
-		ClientID:     getString(config.Auth, "client_id"),
-		ClientSecret: getString(config.Auth, "client_secret"),
-		Environment:  getString(config.Metadata, "environment"),
-	}
-
-	c.client = NewGraphClient(intuneCfg)
+	c.tenantID = getString(config.Auth, "tenant_id")
+	c.clientID = getString(config.Auth, "client_id")
+	c.clientSecret = getString(config.Auth, "client_secret")
 	return nil
 }
 
 // Connect authenticates and verifies connectivity
 func (c *Connector) Connect() error {
+	cfg := &Config{
+		TenantID:     c.tenantID,
+		ClientID:     c.clientID,
+		ClientSecret: c.clientSecret,
+	}
+	c.client = NewGraphClient(cfg)
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
@@ -61,7 +64,10 @@ func (c *Connector) HealthCheck() sdk.HealthStatus {
 	defer cancel()
 
 	start := time.Now()
-	err := c.client.TestConnection(ctx)
+	err := error(nil)
+	if c.client != nil {
+		err = c.client.TestConnection(ctx)
+	}
 
 	return sdk.HealthStatus{
 		ConnectorType: "microsoft_intune",
