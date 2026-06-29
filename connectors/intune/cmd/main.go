@@ -123,6 +123,10 @@ func storeDevice(db *sql.DB, d sdk.CanonicalDevice) error {
 	// Build merged sources array
 	mergedSources := "{" + d.ConnectorType + "}"
 
+	// Handle empty IP/MAC values (inet type doesn't accept empty strings)
+	ipAddress := sql.NullString{String: d.IPAddress, Valid: d.IPAddress != "" && d.IPAddress != " "}
+	macAddress := sql.NullString{String: d.MACAddress, Valid: d.MACAddress != "" && d.MACAddress != " "}
+
 	_, err := db.Exec(`
 		INSERT INTO unified_devices (
 			tenant_id, display_name, asset_type, os_type, os_version,
@@ -143,8 +147,8 @@ func storeDevice(db *sql.DB, d sdk.CanonicalDevice) error {
 		d.SerialNumber,
 		d.Manufacturer,
 		d.Model,
-		d.MACAddress,
-		d.IPAddress,
+		macAddress,
+		ipAddress,
 		d.Status,
 		d.ComplianceStatus,
 		d.LastSeen,
