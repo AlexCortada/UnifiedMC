@@ -155,39 +155,111 @@ func (g *GraphClient) GetPages(ctx context.Context, endpoint string) ([]json.Raw
 	return allItems, nil
 }
 
-// GetDevices retrieves all managed devices from Intune
+// GetDevices retrieves all managed devices from Intune (with pagination)
 func (g *GraphClient) GetDevices(ctx context.Context) ([]GraphDevice, error) {
-	body, err := g.Get(ctx, "/deviceManagement/managedDevices?$top=999")
-	if err != nil {
-		return nil, err
+	allDevices := []GraphDevice{}
+	nextLink := g.cfg.GetGraphBaseURL() + "/deviceManagement/managedDevices?$top=999"
+
+	for nextLink != "" {
+		if err := g.authenticate(ctx); err != nil {
+			return nil, err
+		}
+
+		g.mu.RLock()
+		token := g.token
+		g.mu.RUnlock()
+
+		req, err := http.NewRequestWithContext(ctx, "GET", nextLink, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("ConsistencyLevel", "eventual")
+
+		resp, err := g.httpClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if resp.StatusCode != 200 {
+			return allDevices, fmt.Errorf("graph API error (%d): %s", resp.StatusCode, string(body))
+		}
+
+		var result struct {
+			Value    []GraphDevice `json:"value"`
+			NextLink string        `json:"@odata.nextLink"`
+		}
+		if err := json.Unmarshal(body, &result); err != nil {
+			return nil, fmt.Errorf("failed to parse devices: %w", err)
+		}
+
+		allDevices = append(allDevices, result.Value...)
+
+		// Follow pagination link if present
+		nextLink = result.NextLink
+
+		if nextLink != "" {
+			fmt.Printf("  Fetching next page... (%d devices so far)\n", len(allDevices))
+		}
 	}
 
-	var response struct {
-		Value []GraphDevice `json:"value"`
-	}
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse devices: %w", err)
-	}
-
-	return response.Value, nil
+	return allDevices, nil
 }
 
-// GetUsers retrieves all users from Entra ID
+// GetUsers retrieves all users from Entra ID (with pagination)
 func (g *GraphClient) GetUsers(ctx context.Context, top int) ([]GraphUser, error) {
-	endpoint := fmt.Sprintf("/users?$top=%d&$select=id,displayName,givenName,surname,mail,userPrincipalName,jobTitle,department,accountEnabled,createdDateTime", top)
-	body, err := g.Get(ctx, endpoint)
-	if err != nil {
-		return nil, err
+	allUsers := []GraphUser{}
+	nextLink := fmt.Sprintf("%s/users?$top=%d&$select=id,displayName,givenName,surname,mail,userPrincipalName,jobTitle,department,accountEnabled,createdDateTime",
+		g.cfg.GetGraphBaseURL(), top)
+
+	for nextLink != "" {
+		if err := g.authenticate(ctx); err != nil {
+			return nil, err
+		}
+
+		g.mu.RLock()
+		token := g.token
+		g.mu.RUnlock()
+
+		req, err := http.NewRequestWithContext(ctx, "GET", nextLink, nil)
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("ConsistencyLevel", "eventual")
+
+		resp, err := g.httpClient.Do(req)
+		if err != nil {
+			return nil, err
+		}
+
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if resp.StatusCode != 200 {
+			return allUsers, fmt.Errorf("graph API error (%d): %s", resp.StatusCode, string(body))
+		}
+
+		var result struct {
+			Value    []GraphUser `json:"value"`
+			NextLink string      `json:"@odata.nextLink"`
+		}
+		if err := json.Unmarshal(body, &result); err != nil {
+			return nil, fmt.Errorf("failed to parse users: %w", err)
+		}
+
+		allUsers = append(allUsers, result.Value...)
+		nextLink = result.NextLink
+
+		if nextLink != "" {
+			fmt.Printf("  Fetching next page... (%d users so far)\n", len(allUsers))
+		}
 	}
 
-	var response struct {
-		Value []GraphUser `json:"value"`
-	}
-	if err := json.Unmarshal(body, &response); err != nil {
-		return nil, fmt.Errorf("failed to parse users: %w", err)
-	}
-
-	return response.Value, nil
+	return allUsers, nil
 }
 
 // GetApplications retrieves all managed apps from Intune
