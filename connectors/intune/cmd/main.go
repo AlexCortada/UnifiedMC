@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"time"
@@ -46,8 +45,6 @@ func main() {
 
 	// Test connection
 	fmt.Println("Testing connection to Microsoft Graph API...")
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
 
 	if err := connector.Connect(); err != nil {
 		fmt.Printf("Connection failed: %v\n", err)
