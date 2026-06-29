@@ -113,9 +113,15 @@ func devicesHandler(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, DeviceResponse{
 		Devices: devices,
-		Total:   len(devices),
+		Total:   getDeviceCount(),
 		Source:  "database",
 	})
+}
+
+func getDeviceCount() int {
+	var count int
+	db.QueryRow("SELECT COUNT(*) FROM unified_devices").Scan(&count)
+	return count
 }
 
 func deviceDetailHandler(w http.ResponseWriter, r *http.Request) {
@@ -189,7 +195,7 @@ func getDevicesFromDB(osType, status, compliance string) ([]CanonicalDevice, err
 		argNum++
 	}
 
-	query += " ORDER BY display_name LIMIT 1000"
+	query += " ORDER BY display_name LIMIT 10000"
 
 	rows, err := db.Query(query, args...)
 	if err != nil {
