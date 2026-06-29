@@ -141,7 +141,14 @@ func (g *GraphClient) GetPages(ctx context.Context, endpoint string) ([]json.Raw
 			return nil, fmt.Errorf("failed to parse response: %w", err)
 		}
 
-		allItems = append(allItems, page.Value...)
+		// page.Value is a json.RawMessage containing an array
+		var items []json.RawMessage
+		if err := json.Unmarshal(page.Value, &items); err == nil {
+			allItems = append(allItems, items...)
+		} else {
+			// Single item
+			allItems = append(allItems, page.Value)
+		}
 		nextLink = page.NextLink
 	}
 
