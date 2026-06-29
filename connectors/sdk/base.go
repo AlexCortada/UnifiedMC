@@ -3,7 +3,6 @@ package sdk
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 )
