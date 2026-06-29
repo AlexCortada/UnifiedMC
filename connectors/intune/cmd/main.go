@@ -127,15 +127,15 @@ func storeDevice(db *sql.DB, d sdk.CanonicalDevice) error {
 		INSERT INTO unified_devices (
 			tenant_id, display_name, asset_type, os_type, os_version,
 			serial_number, manufacturer, model,
-			mac_address, status, compliance_status, last_seen,
+			status, compliance_status, last_seen,
 			merged_from_sources, merge_confidence, metadata, created_at, updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8,
-			$9, $10, $11, $12,
-			$13::varchar[], $14, $15::jsonb, NOW(), NOW()
+			$1, $2, $3, $4, $5, $6, $7,
+			$8, $9, $10,
+			$11::varchar[], $12, $13::jsonb, NOW(), NOW()
 		)
 	`,
-		"00000000-0000-0000-0000-000000000001", // tenant_id (placeholder UUID)
+		"00000000-0000-0000-0000-000000000001",
 		d.CanonicalName,
 		d.AssetType,
 		d.OSType,
@@ -143,7 +143,6 @@ func storeDevice(db *sql.DB, d sdk.CanonicalDevice) error {
 		d.SerialNumber,
 		d.Manufacturer,
 		d.Model,
-		d.MACAddress,
 		d.Status,
 		d.ComplianceStatus,
 		d.LastSeen,
