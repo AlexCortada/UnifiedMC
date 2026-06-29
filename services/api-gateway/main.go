@@ -1,30 +1,38 @@
 package main
 
 import (
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
+
+	_ "github.com/lib/pq"
 )
 
 // CanonicalDevice represents a unified device
 type CanonicalDevice struct {
-	ID               string `json:"id"`
-	ExternalID       string `json:"external_id"`
-	ConnectorType    string `json:"connector_type"`
-	TenantID         string `json:"tenant_id"`
-	CanonicalName    string `json:"canonical_name"`
-	AssetType        string `json:"asset_type"`
-	OSType           string `json:"os_type"`
-	OSVersion        string `json:"os_version"`
-	SerialNumber     string `json:"serial_number"`
-	ComplianceStatus string `json:"compliance_status"`
-	Status           string `json:"status"`
-	LastSeen         string `json:"last_seen"`
+	ID               string    `json:"id"`
+	ExternalID       string    `json:"external_id,omitempty"`
+	ConnectorType    string    `json:"connector_type"`
+	TenantID         string    `json:"tenant_id"`
+	CanonicalName    string    `json:"canonical_name"`
+	AssetType        string    `json:"asset_type"`
+	OSType           string    `json:"os_type"`
+	OSVersion        string    `json:"os_version,omitempty"`
+	SerialNumber     string    `json:"serial_number,omitempty"`
+	Manufacturer     string    `json:"manufacturer,omitempty"`
+	Model            string    `json:"model,omitempty"`
+	Status           string    `json:"status"`
+	ComplianceStatus string    `json:"compliance_status"`
+	LastSeen         string    `json:"last_seen,omitempty"`
+	PatchStatus      string    `json:"patch_status,omitempty"`
 }
 
-// DeviceResponse is the API response for device endpoints
+// DeviceResponse is the API response
 type DeviceResponse struct {
 	Devices []CanonicalDevice `json:"devices"`
 	Total   int               `json:"total"`
@@ -35,118 +43,216 @@ type DeviceResponse struct {
 type HealthResponse struct {
 	Status    string `json:"status"`
 	Timestamp string `json:"timestamp"`
-	Service   string `json:"service"`
+	Service   string `json:"version"`
 	Version   string `json:"version"`
 }
 
-// GetEnv retrieves environment variable with fallback
-func GetEnv(key, fallback string) string {
-	if value, ok := os.LookupEnv(key); ok {
-		return value
+var db *sql.DB
+
+func main() {
+	log.Println("Unified IT Operations Portal - API Gateway Starting...")
+
+	// Connect to database
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		dbURL = "postgresql://unifiedmc:***@127.0.0.1:5432/unifiedmc?sslmode=disable"
 	}
-	return fallback
+	dbURL = strings.TrimSpace(dbURL)
+
+	var err error
+	db, err = sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatalf("Database connection failed: %v", err)
+	}
+	defer db.Close()
+
+	if err := db.Ping(); err != nil {
+		log.Fatalf("Database unreachable: %v", err)
+	}
+	log.Println("Connected to PostgreSQL")
+
+	// Setup routes
+	mux := http.NewServeMux()
+	mux.HandleFunc("/health", healthHandler)
+	mux.HandleFunc("/api/v1/devices", devicesHandler)
+	mux.HandleFunc("/api/v1/devices/", deviceDetailHandler)
+	mux.HandleFunc("/api/v1/dashboard", dashboardHandler)
+	mux.HandleFunc("/api/v1/sync/trigger", syncTriggerHandler)
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	log.Printf("Listening on :%s", port)
+	log.Fatal(http.ListenAndServe(":"+port, loggingMiddleware(mux)))
 }
 
-// HealthHandler returns health status
-func HealthHandler(w http.ResponseWriter, r *http.Request) {
+func healthHandler(w http.ResponseWriter, r *http.Request) {
 	response := HealthResponse{
 		Status:    "healthy",
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
-		Service:   GetEnv("SERVICE_NAME", "uop-api-gateway"),
-		Version:   GetEnv("VERSION", "0.1.0"),
+		Service:   "uop-api-gateway",
+		Version:   "0.2.0",
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if db != nil {
+		if err := db.Ping(); err != nil {
+			response.Status = "degraded"
+		}
+	}
+	writeJSON(w, response)
 }
 
-// DevicesHandler returns mock device list
-func DevicesHandler(w http.ResponseWriter, r *http.Request) {
-	// In production, this would call the inventory service
-	devices := []CanonicalDevice{
-		{
-			ID:            "dev-001",
-			ExternalID:    "mock-001",
-			ConnectorType: "mock",
-			TenantID:      "tenant-001",
-			CanonicalName: "DESKTOP-ABC123",
-			AssetType:     "workstation",
-			OSType:        "windows",
-			Status:        "active",
-			LastSeen:      time.Now().UTC().Add(-5 * time.Minute).Format(time.RFC3339),
-		},
-		{
-			ID:            "dev-002",
-			ExternalID:    "mock-002",
-			ConnectorType: "mock",
-			TenantID:      "tenant-001",
-			CanonicalName: "LAPTOP-XYZ789",
-			AssetType:     "workstation",
-			OSType:        "macos",
-			Status:        "active",
-			LastSeen:      time.Now().UTC().Add(-12 * time.Minute).Format(time.RFC3339),
-		},
-		{
-			ID:            "dev-003",
-			ExternalID:    "mock-003",
-			ConnectorType: "mock",
-			TenantID:      "tenant-001",
-			CanonicalName: "SERVER-WEB01",
-			AssetType:     "server",
-			OSType:        "linux",
-			Status:        "active",
-			LastSeen:      time.Now().UTC().Add(-2 * time.Hour).Format(time.RFC3339),
-		},
+func devicesHandler(w http.ResponseWriter, r *http.Request) {
+	devices, err := getDevicesFromDB(r.URL.Query().Get("os_type"), r.URL.Query().Get("status"), r.URL.Query().Get("compliance"))
+	if err != nil {
+		log.Printf("Error fetching devices: %v", err)
+		http.Error(w, `{"error": "database error"}`, 500)
+		return
 	}
 
-	response := DeviceResponse{
+	writeJSON(w, DeviceResponse{
 		Devices: devices,
 		Total:   len(devices),
-		Source:  "mock",
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+		Source:  "database",
+	})
 }
 
-// DeviceDetailHandler returns a single device
-func DeviceDetailHandler(w http.ResponseWriter, r *http.Request) {
-	device := CanonicalDevice{
-		ID:               "dev-001",
-		ExternalID:       "mock-001",
-		ConnectorType:    "mock",
-		TenantID:         "tenant-001",
-		CanonicalName:    "DESKTOP-ABC123",
-		AssetType:        "workstation",
-		OSType:           "windows",
-		OSVersion:        "11 23H2",
-		SerialNumber:     "SN-ABC-12345",
-		ComplianceStatus: "compliant",
-		Status:           "active",
-		LastSeen:         time.Now().UTC().Add(-5 * time.Minute).Format(time.RFC3339),
+func deviceDetailHandler(w http.ResponseWriter, r *http.Request) {
+	deviceID := strings.TrimPrefix(r.URL.Path, "/api/v1/devices/")
+	if deviceID == "" {
+		http.Error(w, `{"error": "device ID required"}`, 400)
+		return
 	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(device)
+
+	var device CanonicalDevice
+	var lastSeen sql.NullTime
+	err := db.QueryRow(`
+		SELECT id, canonical_name, asset_type, os_type, os_version, serial_number,
+		       manufacturer, model, status, compliance_status, last_seen
+		FROM unified_devices WHERE id = $1 OR canonical_name ILIKE $2
+		LIMIT 1`, deviceID, "%"+deviceID+"%").Scan(
+		&device.ID, &device.CanonicalName, &device.AssetType, &device.OSType,
+		&device.OSVersion, &device.SerialNumber, &device.Manufacturer, &device.Model,
+		&device.Status, &device.ComplianceStatus, &device.LastSeen,
+	)
+	if err != nil {
+		http.Error(w, `{"error": "device not found"}`, 404)
+		return
+	}
+	if lastSeen.Valid {
+		device.LastSeen = lastSeen.Time.Format(time.RFC3339)
+	}
+
+	writeJSON(w, device)
 }
 
-// LoggingMiddleware logs HTTP requests
-func LoggingMiddleware(next http.Handler) http.Handler {
+func dashboardHandler(w http.ResponseWriter, r *http.Request) {
+	summary := getDashboardSummary()
+	writeJSON(w, summary)
+}
+
+func syncTriggerHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, `{"error": "method not allowed"}`, 405)
+		return
+	}
+	writeJSON(w, map[string]string{"status": "sync_queued", "message": "Sync triggered via API"})
+}
+
+func getDevicesFromDB(osType, status, compliance string) ([]CanonicalDevice, error) {
+	query := `
+		SELECT id, canonical_name, asset_type, os_type, os_version, serial_number,
+		       manufacturer, model, status, compliance_status, last_seen
+		FROM unified_devices
+		WHERE 1=1`
+	args := []interface{}{}
+	argNum := 1
+
+	if osType != "" {
+		query += fmt.Sprintf(" AND os_type = $%d", argNum)
+		args = append(args, osType)
+		argNum++
+	}
+	if status != "" {
+		query += fmt.Sprintf(" AND status = $%d", argNum)
+		args = append(args, status)
+		argNum++
+	}
+	if compliance != "" {
+		query += fmt.Sprintf(" AND compliance_status = $%d", argNum)
+		args = append(args, compliance)
+		argNum++
+	}
+
+	query += " ORDER BY display_name LIMIT 1000"
+
+	rows, err := db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var devices []CanonicalDevice
+	for rows.Next() {
+		var d CanonicalDevice
+		var lastSeen sql.NullTime
+		err := rows.Scan(
+			&d.ID, &d.CanonicalName, &d.AssetType, &d.OSType,
+			&d.OSVersion, &d.SerialNumber, &d.Manufacturer, &d.Model,
+			&d.Status, &d.ComplianceStatus, &lastSeen,
+		)
+		if err != nil {
+			return nil, err
+		}
+		if lastSeen.Valid {
+			d.LastSeen = lastSeen.Time.Format(time.RFC3339)
+		}
+		devices = append(devices, d)
+	}
+	return devices, nil
+}
+
+func getDashboardSummary() map[string]interface{} {
+	var total, online, compliant, nonCompliant int
+
+	db.QueryRow("SELECT COUNT(*) FROM unified_devices").Scan(&total)
+	db.QueryRow("SELECT COUNT(*) FROM unified_devices WHERE status = 'active'").Scan(&online)
+	db.QueryRow("SELECT COUNT(*) FROM unified_devices WHERE compliance_status = 'compliant'").Scan(&compliant)
+	db.QueryRow("SELECT COUNT(*) FROM unified_devices WHERE compliance_status = 'non_compliant'").Scan(&nonCompliant)
+
+	rows, _ := db.Query("SELECT os_type, COUNT(*) FROM unified_devices GROUP BY os_type ORDER BY os_type")
+	osBreakdown := map[string]int{}
+	for rows.Next() {
+		var os string
+		var count int
+		rows.Scan(&os, &count)
+		osBreakdown[os] = count
+	}
+	rows.Close()
+
+	return map[string]interface{}{
+		"total_devices":      total,
+		"online_devices":     online,
+		"offline_devices":    total - online,
+		"compliant_count":    compliant,
+		"non_compliant_count": nonCompliant,
+		"compliance_rate":    fmt.Sprintf("%.1f", float64(compliant)/float64(total)*100),
+		"os_breakdown":       osBreakdown,
+		"source":             "database",
+		"last_updated":       time.Now().UTC().Format(time.RFC3339),
+	}
+}
+
+func writeJSON(w http.ResponseWriter, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(data)
+}
+
+func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		next.ServeHTTP(w, r)
 		log.Printf("%s %s %s", r.Method, r.URL.Path, time.Since(start))
 	})
-}
-
-func main() {
-	log.Println("Unified IT Operations Portal - API Gateway Starting...")
-	log.Printf("Service: %s", GetEnv("SERVICE_NAME", "uop-api-gateway"))
-	log.Printf("Port: %s", GetEnv("PORT", "8080"))
-
-	mux := http.NewServeMux()
-	mux.HandleFunc("/health", HealthHandler)
-	mux.HandleFunc("/api/v1/devices", DevicesHandler)
-	mux.HandleFunc("/api/v1/devices/", DeviceDetailHandler)
-
-	port := GetEnv("PORT", "8080")
-	log.Printf("Listening on :%s", port)
-	log.Fatal(http.ListenAndServe(":"+port, LoggingMiddleware(mux)))
 }
