@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/unifiedmc/connectors/intune"
 	_ "github.com/unifiedmc/connectors/intune"
 	sdk "github.com/unifiedmc/connectors/sdk"
 )
@@ -11,16 +12,13 @@ import (
 func main() {
 	fmt.Println("=== Intune Connector Test ===")
 
-	// Read from environment or use defaults for testing
-	tenantID := os.Getenv("INTUNE_TENANT_ID")
-	clientID := os.Getenv("INTUNE_CLIENT_ID")
-	clientSecret := os.Getenv("INTUNE_CLIENT_SECRET")
-
-	if tenantID == "" || clientID == "" || clientSecret == "" {
-		fmt.Println("Missing credentials. Set environment variables:")
-		fmt.Println("  INTUNE_TENANT_ID")
-		fmt.Println("  INTUNE_CLIENT_ID")
-		fmt.Println("  INTUNE_CLIENT_SECRET")
+	// Use LoadConfig which checks env vars then falls back to /etc/unifiedmc/intune.json
+	cfg, err := intune.LoadConfig()
+	if err != nil {
+		fmt.Printf("Config error: %v\n", err)
+		fmt.Println("\nTroubleshooting:")
+		fmt.Println("  1. Set environment variables: INTUNE_TENANT_ID, INTUNE_CLIENT_ID, INTUNE_CLIENT_SECRET")
+		fmt.Println("  2. Or create /etc/unifiedmc/intune.json with tenant_id, client_id, client_secret")
 		os.Exit(1)
 	}
 
@@ -32,12 +30,12 @@ func main() {
 
 	config := sdk.ConnectorConfig{
 		ConnectorType: "microsoft_intune",
-		TenantID:      tenantID,
+		TenantID:      cfg.TenantID,
 		Name:          "Intune Production",
 		Auth: map[string]interface{}{
-			"tenant_id":     tenantID,
-			"client_id":     clientID,
-			"client_secret": clientSecret,
+			"tenant_id":     cfg.TenantID,
+			"client_id":     cfg.ClientID,
+			"client_secret": cfg.ClientSecret,
 		},
 		RateLimit: 60,
 	}
@@ -47,9 +45,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Printf("Tenant: %s\n", tenantID)
-	fmt.Printf("Client: %s\n", clientID)
-	fmt.Printf("Secret length: %d\n", len(clientSecret))
+	fmt.Printf("Tenant: %s\n", cfg.TenantID)
+	fmt.Printf("Client: %s\n", cfg.ClientID)
+	fmt.Printf("Secret length: %d\n", len(cfg.ClientSecret))
 
 	fmt.Println("\nTesting connection...")
 	if err := connector.Connect(); err != nil {
