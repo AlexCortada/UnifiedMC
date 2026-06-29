@@ -127,6 +127,9 @@ func storeDevice(db *sql.DB, d sdk.CanonicalDevice) error {
 	ipAddress := sql.NullString{String: d.IPAddress, Valid: d.IPAddress != "" && d.IPAddress != " "}
 	macAddress := sql.NullString{String: d.MACAddress, Valid: d.MACAddress != "" && d.MACAddress != " "}
 
+	// Get or create the default tenant
+	tenantID := getOrCreateTenant(db, d.TenantID)
+
 	_, err := db.Exec(`
 		INSERT INTO unified_devices (
 			tenant_id, display_name, asset_type, os_type, os_version,
@@ -139,7 +142,7 @@ func storeDevice(db *sql.DB, d sdk.CanonicalDevice) error {
 			$14::varchar[], $15, $16::jsonb, NOW(), NOW()
 		)
 	`,
-		"00000000-0000-0000-0000-000000000001", // tenant_id placeholder
+		tenantID,
 		d.CanonicalName,
 		d.AssetType,
 		d.OSType,
@@ -159,7 +162,33 @@ func storeDevice(db *sql.DB, d sdk.CanonicalDevice) error {
 	return err
 }
 
+// getOrCreateTenant returns the tenant ID, creating a default tenant if needed
+func getOrCreateTenant(db *sql.DB, name string) string {
+	// Try to find existing tenant
+	var id string
+	err := db.QueryRow("SELECT id FROM tenants WHERE name = $1", name).Scan(&id)
+	if err == nil {
+		return id
+	}
+
+	// Create default tenant
+	if name == "" {
+		name = "Default Tenant"
+	}
+	err = db.QueryRow(
+		"INSERT INTO tenants (name, domain, status) VALUES ($1, $2, 'active') RETURNING id",
+		name, name+".local",
+	).Scan(&id)
+	if err != nil {
+		// Fallback: return first tenant
+		db.QueryRow("SELECT id FROM tenants LIMIT 1").Scan(&id)
+	}
+	return id
+}
+
 func storeUser(db *sql.DB, u sdk.CanonicalUser) error {
+	tenantID := getOrCreateTenant(db, u.TenantID)
+
 	_, err := db.Exec(`
 		INSERT INTO users (
 			tenant_id, email, display_name, first_name, last_name,
@@ -172,7 +201,7 @@ func storeUser(db *sql.DB, u sdk.CanonicalUser) error {
 			status = EXCLUDED.status,
 			updated_at = NOW()
 	`,
-		"00000000-0000-0000-0000-000000000001", // tenant_id (placeholder UUID)
+		tenantID,
 		u.Email,
 		u.DisplayName,
 		u.FirstName,
