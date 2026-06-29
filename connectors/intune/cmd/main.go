@@ -58,7 +58,7 @@ func main() {
 	// Connect to database
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		dbURL = "postgresql://unifiedmc:***@docker-postgres-1:5432/unifiedmc?sslmode=disable"
+		dbURL = "postgresql://unifiedmc:***@127.0.0.1:5432/unifiedmc?sslmode=disable"
 	}
 
 	// Clean the URL (remove any accidental whitespace/newlines)
