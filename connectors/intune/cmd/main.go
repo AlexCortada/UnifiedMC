@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	_ "github.com/unifiedmc/connectors/intune"
 	sdk "github.com/unifiedmc/connectors/sdk"
 )
 
